@@ -1,0 +1,7 @@
+Make	Model	Default	Force	Notes
+Microsoft	Virtual	Win11Prod		Sample for HUB testing
+Dell	OBE5		Win11Prod	Hub Device
+(HP|Hewlett)	8882		Win11Prod	Hub Device
+(HP|Hewlett)	9855		Win11Prod	Hub Device
+Lenovo	M47k		Win11Prod	Hub Device
+Lenovo	M2WK		Win11Prod	Hub Device
