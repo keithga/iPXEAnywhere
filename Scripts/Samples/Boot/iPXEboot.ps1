@@ -67,21 +67,21 @@ if ( test-path $MyScriptRoot\..\Custom\Constants.ps1 ) {
 if ( test-path $MyScriptRoot\..\Library\2PintDebugging.ps1 ) {
     . $MyScriptRoot\..\Library\2PintDebugging.ps1
 
-    if ( $LogPath ) {
-        remove-item $logPath -ErrorAction SilentlyContinue -Force | Out-Null
-        Write-2PintDumpAllVariables $LogPath
-    }
-    
     if ( $VerbosePreference -eq 'continue' ) {
         Enable-HostOverride  #redirect Write-Host,Write-Verbose... commands to iPXEWS Log 
-    }
+
+        if ( $LogPath ) {
+            remove-item $logPath -ErrorAction SilentlyContinue -Force | Out-Null
+            Write-2PintDumpAllVariables $LogPath
+        }    }
+
 }
 
 #endregion
 
 ###############################################################################
 
-write-verbose "START iPXEBoot:[$($PostParams['authmethod'])] Value:[$($PostParams['authvalue'])]"
+write-verbose "START iPXEBoot:[$($RequestStatusinfo.ApprovedBy)]"
 
 #region Enable any network security exceptions like 802.1x
 
@@ -101,7 +101,7 @@ if ( test-path function:\revoke-MyNetworkSecurity ) {
 
 #region Get Defaults for this machine 
 
-$DefaultMenu = 'galaxyprod'
+$DefaultMenu = 'win11prod'
 $ForceMenuDefault = $null
 
 if ( test-path $MyScriptRoot\..\Custom\DeviceList.txt ) {
@@ -136,7 +136,7 @@ if($arrayOfTrustedSubnets.Contains($DeployNetwork.NetworkId.ToString()) ) {
     $xm = $true
 }
 
-if(($PostParams["authmethod"] -match "adurl") -and ($PostParams["authvalue"] -match 'ImgAdmin')) {
+if(( $RequestStatusinfo.ApprovedBy -match 'ImgAdmin')) {
     Write-Host "Menu Mode: Imaging administrators $($PostParams['authvalue'])"
     $xm = $true
 }
@@ -169,23 +169,23 @@ menu Please choose OS version for production deployment [$env:computerName]
 item --gap Available Operating Systems
 item
 item --key a win10prod Windows 10 22H2
-item --key b win11prod Windows 11 22H2
+$(if ($xm) {'item --key b win11prod Windows 11 22H2'})
 item
 $(if ($xm) {'item --key q cmprod List other available task sequences'})
 $(if ($xm) {'item'})
 $(if ($xm) {'item --gap Other Boot Options'})
-$(if ($xm) {'item --key c galaxyprod galaxy - Prod (v070722) (default)'})
-$(if ($xm) {'item --key k galaxypre galaxy - Pre-Prod (v010123)'})
+$(if ($xm) {'item --key c galaxyprod galaxy - Prod'})
+$(if ($xm) {'item --key k galaxypre galaxy - Pre-Prod'})
 $(if ($xm) {'item'})
 item --key x exit      Exit and continue boot order
 
 choose --default $($DefaultMenu.ToLower()) --timeout 30000 target && goto `${target} || goto exit
 
 :win10prod
-chain `${wsurl}/script?scriptname=configmgr/win10prod.ps1##params=paramdata || shell
+chain --timeout 360000 `${wsurl}/script?scriptname=configmgr/win10prod.ps1##params=paramdata || shell
 
 :win11prod
-chain `${wsurl}/script?scriptname=configmgr/win11prod.ps1##params=paramdata || shell
+chain --timeout 360000 `${wsurl}/script?scriptname=configmgr/win11prod.ps1##params=paramdata || shell
 
 :cmprod
 chain `${wsurl}/script?scriptname=configmgr/cm.ps1##params=paramdata || shell
@@ -202,6 +202,8 @@ goto start
 reboot
 
 :exit
+# Force iPXE to delete DB Object
+initrd `${wsurl}/report/deployend##params=paramdata
 exit 1
 "@
 
