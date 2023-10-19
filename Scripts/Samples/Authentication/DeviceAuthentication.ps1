@@ -101,10 +101,45 @@ else {
 
 #endregion
 
+#region iPXE Regression Testing and Buildout Override...
+#######################################
+ 
+$bootOverride = $null
+if ( $PostParams['asset'] -eq '3992-462b-f644-8b6a-835b-ba6c-01' ) {
+    $bootOverride = 'MEM00101' # WIn 10 Prod
+}
+elseif ( $PostParams['asset'] -eq '3992-462b-f644-8b6a-835b-ba6c-02' ) {
+    $bootOverride = 'MEM00110' # WIn 10 Pre-Prod
+}
+elseif ( $PostParams['asset'] -eq '3992-462b-f644-8b6a-835b-ba6c-03' ) {
+    $bootOverride = 'MEM00111' # Win 11 Prod
+}
+elseif ( $PostParams['asset'] -eq '3992-462b-f644-8b6a-835b-ba6c-04' ) {
+    $bootOverride = 'MEM00110' # Win 11 Pre-Prod
+}
+elseif ( ($PostParams['asset'] -eq 'e210cac7-c0be-4e6b-bcc3-9d57cd7181f3' ) -and ( [datetime]::now -lt ([datetime]'9/11/2023') ) ) {
+    $bootOverride = 'MEM00101' # WIn 10 Prod
+}
+else {
+    Write-Warning "Unknown Type"
+}
+ 
+if ($bootOverride) {
+    Write-Host "DeviceAuthentication Finish: Trusted Machine $($BootOverride)"
+    $RequestStatusInfo.Approved = $true
+    $RequestStatusInfo.ApprovedBy = "ByPass";
+    return $RequestStatusInfo
+}
+
+#endregion 
+
 #region is Trusted Network ( No Authentication )
 #######################################
 
-if($arrayOfTrustedSubnets.Contains($DeployNetwork.NetworkId.ToString()) ) {
+$GlobalArrayOfTrustedSubnets = $arrayOfTrustedSubnets + $arrayOfTrustedSubnetsLimitedMenu
+
+
+if($GlobalArrayOfTrustedSubnets.Contains($DeployNetwork.NetworkId.ToString()) ) {
     Write-Host "DeviceAuthentication Finish: Trusted Build Center $($DeployNetwork.NetworkId.ToString())"
     $RequestStatusInfo.Approved = $true;
     $RequestStatusInfo.ApprovedBy = "BuildCenter";
@@ -136,6 +171,7 @@ if(($PostParams["authmethod"] -eq 'pin') -and ($SecretPin -ne $null) -and ($Post
 }
 
 #endregion
+
 
 ###############################################################################
 

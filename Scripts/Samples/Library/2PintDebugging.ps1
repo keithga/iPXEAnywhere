@@ -149,21 +149,23 @@ function Write-2PintDumpAllVariables {
     [cmdletbinding()]
     param( $logPath )
 
-    ('************* Machine') | Write-2PintLog
-    $Machine | out-string | Write-2PintLog
-    ('************* RequestStatusInfo') | Write-2PintLog
-    $RequestStatusInfo | out-string | Write-2PintLog
-    ('************* RequestNetworkInfo') | Write-2PintLog
-    $RequestNetworkInfo | out-string | Write-2PintLog
-    ('************* DeployNetwork') | Write-2PintLog
-    $RequestNetworkInfo.DeployNetwork | out-string | Write-2PintLog
-    ('************* QueryParams') | Write-2PintLog
-    $QueryParams | out-string | Write-2PintLog
-    ('************* PostParams') | Write-2PintLog
-    $PostParams | out-string | Write-2PintLog
-    ('************* Paramdata') | Write-2PintLog
-    $paramData -replace '\r\n',"`r`n" | Write-2PintLog
-    ('*' * 80 ) | Write-2PintLog
+    if ( $DebugPreference -ne 'continue' ) { return }
+
+    ('************* Machine') | write-host
+    $Machine | out-string | write-host
+    ('************* RequestStatusInfo') | write-host
+    $RequestStatusInfo | out-string | write-host
+    ('************* RequestNetworkInfo') | write-host
+    $RequestNetworkInfo | out-string | write-host
+    ('************* DeployNetwork') | write-host
+    $RequestNetworkInfo.DeployNetwork | out-string | write-host
+    ('************* QueryParams') | write-host
+    $QueryParams | out-string | write-host
+    ('************* PostParams') | write-host
+    $PostParams | out-string | write-host
+    ('************* Paramdata') | write-host
+    $paramData -replace '\r\n',"`r`n" | write-host
+    ('*' * 80 ) | write-host
 
 }
 

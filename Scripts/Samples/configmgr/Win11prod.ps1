@@ -1,119 +1,108 @@
-<#
-.Synopsis
-   iPXEAnywhere Powershell Boot Handler
-.DESCRIPTION
-   iPXEAnywhere boot service, Used to display 1st menu after Device Authentication.
-.EXAMPLE
-   & .\iPXEBoot.ps1 - Called from within the iPXEAnywhere Service   
-#>
-[cmdletbinding(DefaultParameterSetName='default')]
-Param
-(
-    
-    [object] $Machine,
-    [object] $RequestStatusInfo,
-    [object] $RequestNetworkInfo,
-
-    [hashtable] $QueryParams,
-    [hashtable] $PostParams,
-    [string] $Paramdata,
-
-    # The Following is only Applicable with StifleR intergration. 
-    [Parameter(ParameterSetName = 'StifleR')]
-    $TargetLocation,
-    [Parameter(ParameterSetName = 'StifleR')]
-    $TargetNetworkGroup,
-    [Parameter(ParameterSetName = 'StifleR')]
-    $TargetNetwork,
-    [Parameter(ParameterSetName = 'StifleR')]
-    $TargetMachineKeyValues,
-    [Parameter(ParameterSetName = 'StifleR')]
+﻿param(
+    $Machine, 
+    $RequestStatusInfo, 
+    $RequestNetworkInfo, 
+    $Machineinformation, 
+    $QueryParams, 
+    $PostParams, 
+    $Paramdata, 
     $DeployMachineKeyValues,
-    [Parameter(ParameterSetName = 'StifleR')]
+    $TargetMachineKeyValues,
     $DeployLocation,
-    [Parameter(ParameterSetName = 'StifleR')]
     $DeployNetworkGroup,
-    [Parameter(ParameterSetName = 'StifleR')]
     $DeployNetwork,
-
-    [Parameter(ValueFromRemainingArguments)]
-    $RemainingDoNotUse 
+    $TargetLocation,
+    $TargetNetworkGroup,
+    $TargetNetwork
 )
 
-#region Initialize
-#######################################
 
-$MyScriptRoot = $PSScriptRoot
-if ( [string]::IsNullOrEmpty($PSScriptRoot) ) { 
-    # We are running in iPXEAnywhereWS. Get Full Path of this script directory from host.
-    $MyScriptRoot = [iPXEAnywhere.Service.Configuration]::DeviceAuthenticationScript.Directory
+#GUID based UUID property in DB, so change to string based for PS to understand
+[string]$SMBIOSGUID = $Machine.UUID.ToString()
+[string]$MAC = $RequestStatusInfo.DeployMAC.ToString()
+
+$verifyScriptPath = "D:\Apps\2Pint Software\iPXE AnywhereWS\Scripts"
+$CMVerifyFile = "$verifyScriptPath\ConfigMgr\Shared\Verify-CMObjects.ps1" 
+
+#Load the main CM functions
+. $CMVerifyFile
+
+#This functions sets the object to unknown
+$verified = Verify-CMObjectUnknwon -SMBIOSGUID $SMBIOSGUID -MACAddress $MAC
+if($verified -is [string])
+{
+    #Failed to delete the objects, this returns an iPXE string/script
+    return $verified
 }
-
-if ( test-path $MyScriptRoot\..\Custom\Constants.ps1 ) {
-    try {
-        . $MyScriptRoot\..\Custom\Constants.ps1
-    }
-    catch { 
-        write-warning "Failed to run .\Custom\Constants.ps1"
-        $_ | out-string | write-warning
-    }
+elseif($verified -eq $true)
+{
+    #Success, we can boot this device
 }
-
-#endregion
-
-#region Debugging
-#######################################
-
-if ( test-path $MyScriptRoot\..\Library\2PintDebugging.ps1 ) {
-    . $MyScriptRoot\..\Library\2PintDebugging.ps1
-
-    if ( $LogPath ) {
-        remove-item $logPath -ErrorAction SilentlyContinue -Force | Out-Null
-        Write-2PintDumpAllVariables $LogPath
-    }
-    
-    if ( $VerbosePreference -eq 'continue' ) {
-        Enable-HostOverride  #redirect Write-Host,Write-Verbose... commands to iPXEWS Log 
-    }
-}
-
-#endregion
-
-###############################################################################
-
-write-verbose "START iPXEBoot:[$($PostParams['authmethod'])] Value:[$($PostParams['authvalue'])]"
-
-#######################################
-
-$Menu = @"
+else
+{
+    #Failed here but we dont know why
+    $errorData = @"
 #!ipxe
-#default section to set some key variable such as pictures etc.
+echo Failed to execute verification
+shell
+"@
+    return $errorData;
+}
 
-set peerdist $BCEnabled
-$peerdedicatehost
 
-#set debug true
+#Win11 Prod Hidden Deployment to Unknown Objects collection
+$TargetOfferId = "MEM24020"
 
-#This calls the default param set named paramdata used in posts
-$Paramdata
+$Paramdata = $Paramdata + 
+@"
 
-echo DONE
-echo DONE
-echo DONE
-echo DONE
-echo DONE
-echo DONE
-
-prompt press any key to continue...
-
-echo Force iPXE database object to reset for next boot
-imgfetch `${wsurl}/Report/DeployEnd##params=paramdata
-echo boot to OS...
-
-chain `${pxeurl}/2PXE/boot##params=paramdata || shell
+param --params paramdata nomenu true
+#This selects what gets deployed
+#Note: The machine still has to have deployment in offerid targetting the device!!!
+param --params paramdata offerid $TargetOfferId
+#Prompt or no prompt
+param --params paramdata mandatory true
 
 "@
 
-# $Menu | write-verbose
 
-$Menu | write-output
+$menu = @"
+#!ipxe
+
+#set debug true
+isset `${peerdist} || set peerdist 1
+#This calls the default param set named paramdata used in posts
+$Paramdata
+
+#Set the override to allow the 2PXE server to bypess the WS execution
+param --params paramdata wsoverride 1 ||
+
+#get existing object
+
+#Call Central site
+#Call primary site and wait
+
+
+#get all params from CM
+
+#get all params from some other DB
+
+#add to db
+
+#wipe record - call 
+
+
+
+
+
+#build as new system
+#If one wanted you could provide a menu of all servers to select from here.
+set completeurl `${pxeurl}2PXE/boot##params=paramdata
+echo `${completeurl}
+chain `${completeurl} || shell
+
+"@
+
+
+
+return $menu

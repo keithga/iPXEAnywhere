@@ -13,17 +13,21 @@ param()
 #######################################
 
 # Path to dump variables for debugging
-# $logPath = 'C:\programdata\2Pint Software\iPXEWS\iPXEBoot.log'
 
 # Enable Debug Logging
-# $VerbosePreference = 'continue'
+$VerbosePreference = 'continue'
 
 #######################################
 
 # Trusted Subnets, no need to prompt for credentials
 $arrayOfTrustedSubnets = @(  
-    "10.123.0.0"    
+"10.0.1.0"
     )
+
+# Trusted Subnets-limited menu, no need to prompt for credentials
+$arrayOfTrustedSubnetsLimitedMenu = @(
+"10.0.2.0"
+)
 
 #######################################
 
@@ -70,8 +74,32 @@ goto user
 
 # Subnets not managed by 802.1x
 $arrayOfNon802x1Subnets = @(
-    "10.0.0.0"        
+"10.0.1.0"
+
 )
+
+function Write-2PintConsole
+{
+    [cmdletbinding()]
+    param(
+        [Parameter(Position=0, ValueFromPipeline=$true, Mandatory=$true, ValueFromRemainingArguments=$true)]
+        [Alias('Msg')]
+        [Alias('Object')]
+        [AllowEmptyString()]
+        [string]
+        ${Message}
+    )
+
+    Process {
+        foreach ($Msg in $Message ) {
+            foreach ( $Line in $Msg -split "\r?\n" ) { 
+                echo "echo $Line"
+            }
+        }
+    }
+}
+
+
 
 # Custom handler for 802.1x exceptions
 function revoke-MyNetworkSecurity {
@@ -86,31 +114,128 @@ function revoke-MyNetworkSecurity {
     }
 
     $body = @{
-        user = 'XXXX'
-        password = 'XXXX'
+        user = 'corp\8021xaccount'
+        password = 'P@ssw0rd'
         mac = $RequestStatusInfo.DeployMac.ToString() -replace ':','-'
     } | ConvertTo-Json -Compress 
     
+    $ErrorOut = $null
+    $restOut = ''
     try { 
-       $result = Invoke-WebRequest "https://InternalSite.local:8443/auto_reimage.pl?POSTDATA=$([uri]::EscapeDataString($Body))" -verbose -UseBasicParsing
-       $result | out-string | write-verbose
+        $result = Invoke-WebRequest "https://internal8021xapi:443/8021x_mab.pl?POSTDATA=$([uri]::EscapeDataString($Body))" -verbose -UseBasicParsing
+        write-verbose "Result back from https://internal8021xapi"
+        $result | out-string | write-verbose
+
+        if ( ( $result.StatusCode -ne 200 ) -or ( $result.RawContentLength -ne 1 ) ) { 
+            $ErrorOut = $result.content | write-2PintConsole 
+        }
+        else {
+            $restOut = $result.Content
+        }
     }
     catch {
-        write-warning "Failed to make Web Request to https://internalsite.local"
-        $_ | out-string |write-warning
+        write-warning "Failed to make Web Request to https://internal8021xapi"
+        $ErrorOut = $_ | write-2PintConsole 
+
     }
 
-    #Additional Commands to run: 
+    #Now output to Console:
 
-    @"
+    if ( $ErrorOut ) {
 
-# MAB Testing
+         @"
 
-echo Reset Network for MAB 802.1x testing
-ifclose
-ifconf
-echo Finish Network Reset for 802.1x
+echo ####################################################
+echo ####################################################
+echo
+echo Failure to get MAB 802.1x exception:
+echo
+$( $ErrorOut -join [environment]::newline )
+echo
+echo ####################################################
+echo ####################################################
+prompt --key q Press 'q' to quit && exit || echo continue
+
+"@  | Write-Output
+
+    }
+    else { 
+ 
+        @"
+
+set currentnic `${netX/ifname}
+
+echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+echo Start MAB Exception process [`${currentnic}] ...
+ifstat `${currentnic}
+echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+#ping -c 1 sccmipx2.corp.contoso.com && goto mabdone || echo Unable to ping sccmipx2
+#ping -c 1 sccmipx1.corp.contoso.com && goto mabdone || echo Unable to ping sccmipx1
+
+echo Unable to reach SCCMIPX[1|2] Begin Mab Process  `${currentnic}
+
+ifclose `${currentnic}
+
+echo sleep 10 and restart NIC `${currentnic}
+sleep 10
+
+:mabretry
+ifconf `${currentnic} || goto mabbadnic
+iflinkwait --timeout 1000 `${currentnic} || goto mabbadnic
+
+#ping -c 1 sccmipx2.corp.contoso.com && goto mabdone || echo Unable to ping sccmipx2
+#ping -c 1 sccmipx1.corp.contoso.com && goto mabdone || echo Unable to ping sccmipx1
+
+ping -c 1 ipxe.corp.contoso.com && goto mabnobypass || goto mabbadnic
+
+:mabbadnic
+echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+echo
+echo Unable to reach ipxe.corp.contoso.com. NIC in a bad state.
+echo 
+echo If this is the first time seeing this error, press ENTER for reset.
+echo If the problem persists, shutdown the machine and retry.
+echo If the problem STILL persists, take a picture of this screen and escalate.
+echo
+echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ifstat `${currentnic}
+prompt --timeout 30000 press return to retry reset
+ifclose `${currentnic}
+goto mabretry
+
+:mabnobypass
+echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+echo
+echo Unable to reach 802.1x protected machine(s).
+echo 
+echo If this is the first time seeing this error, press ENTER for reset.
+echo If the problem persists, try disconnecting the network cable and retry.
+echo If the problem persists, shutdown the machine and retry.
+echo If the problem STILL persists, take a picture of this screen and escalate.
+echo
+echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ifstat `${currentnic}
+prompt --timeout 30000 press return to retry reset
+# ifclose `${currentnic}
+set completeurl `${pxeurl}2PXE/boot##params=paramdata
+echo Boot... `${pxeurl}2PXE/boot##params=paramdata
+chain --autofree --replace `${pxeurl}2PXE/boot##params=paramdata || goto mabretry
+
+:mabdone
+echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+echo Finish Network Reset for 802.1x `${currentnic}
+echo MAB DONE!
+echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+prompt --timeout 30000 press return to FINISH
 
 "@ | write-output
+
+    }
 
 }

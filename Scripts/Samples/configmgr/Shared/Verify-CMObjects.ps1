@@ -5,43 +5,30 @@
     Creation Date:  2023-02-03
     Purpose/Change: Initial script development
 
- 
 
 #>
 
- 
-
 Function Verify-CMObjectUnknwon {
-<#
+    <#
 .SYNOPSIS
   Queries the CM DB and returns
 
- 
-
 .DESCRIPTION
   Queries a SQL database and returs the result
-
- 
 
 .PARAMETER SQLServerFQDN
     FQDN for the CM SQL server
     cmsql.contoso.org
     If not specified the value in CMServerFQDN will be used for SQL queries.
 
- 
-
 .PARAMETER SiteDB
     Name of the site DB
-
+    
 .INPUTS
     Not much
 
- 
-
 .OUTPUTS
     A string of "OK" if all is OK
-
- 
 
 .NOTES
   Version:        1.0
@@ -49,10 +36,8 @@ Function Verify-CMObjectUnknwon {
   Creation Date:  2023-02-07
   Purpose/Change: Initial script development
 
- 
-
 .EXAMPLE
-
+  
 #>
     Param(
         [Parameter(Mandatory = $true)][string]$SMBIOSGUID,
@@ -60,36 +45,24 @@ Function Verify-CMObjectUnknwon {
     )
     Process {
 
- 
-
                 $adminsvc = "sccmsvp1.ent.wfb.bank.corp";
                 $SQLServerFQDN = "SCCMCASSQL.ent.wfb.bank.corp";
                 $SiteDB = "CM_MEM";
                 $SiteCode = "MEM";
                 $scriptPath = "D:\Apps\2Pint Software\iPXE AnywhereWS\Scripts"
 
- 
+                $CMFile = "$scriptPath\ConfigMgr\Shared\Manage-CMObjects.ps1" 
 
-                $CMFile = "$scriptPath\ConfigMgr\Shared\Manage-CMObjects.ps1"
-
- 
-
-                if(Test-Path $CMFile -eq $false)
+                if((Test-Path $CMFile) -eq $false)
                 {
                     throw [System.IO.FileNotFoundException] "Could not find: $CMFile"
                 }
 
- 
-
                 #Load the main CM functions
                 . $CMFile
 
- 
-
                 $devicelookupSMBIOS = Get-CMObject -KeyIdentifier "SMBIOS" -Value "$SMBIOSGUID" -CMServerFQDN $adminsvc -SQLServerFQDN $SQLServerFQDN -SiteDB $SiteDB -SiteCode $SiteCode -UseWMI
                 $devicelookupMAC = Get-CMObject -KeyIdentifier "MACAddress" -Value "$MACAddress" -CMServerFQDN $adminsvc -SQLServerFQDN $SQLServerFQDN -SiteDB $SiteDB -SiteCode $SiteCode -UseWMI
-
- 
 
 
                 if(($devicelookupMAC -eq $null) -or ($devicelookupSMBIOS -eq $null))
@@ -102,10 +75,9 @@ shell
 "@
                     return $errorData;
 
- 
-
                 }
-                elseif(($devicelookupMAC -eq $false) -and ($devicelookupSMBIOS -eq $false))
+                #elseif(($devicelookupMAC -eq $false) -and ($devicelookupSMBIOS -eq $false))
+                elseif($devicelookupSMBIOS -eq $false)
                 {
                     # No record to delete return $true
                     return $true
@@ -130,8 +102,6 @@ echo Failed to delete the record
 shell
 "@
 
- 
-
                         return $errorData;
                     }
                 }
@@ -140,10 +110,11 @@ shell
                             $errorData = @"
 #!ipxe
 echo Too many records to deal with!
+echo BIOS lookup found: $($devicelookupSMBIOS)
+echo Mac lookup found: $($devicelookupMAC)
+echo Please contact the Configuration Manager team with these details
 shell
 "@
-
- 
 
                         return $errorData;
                 }
@@ -153,8 +124,6 @@ shell
                     {
                         #Two conflicting records
                     }
-
- 
 
 
                      $errorData = @"
@@ -168,18 +137,12 @@ echo MAC - $($devicelookupMAC[0].ResourceId) - $($devicelookupMAC[0].Name)
 shell
 "@
 
- 
-
                     return $errorData;
                     #Compare if SMBIOS entry is also the MAC entry
                     #If so, safe to whack it safely, if not, we return a screen
                     #Device is in DB, clear it Out
 
- 
-
                 }
-
- 
 
     }
 }
