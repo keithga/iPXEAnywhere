@@ -45,8 +45,8 @@ Function Verify-CMObjectUnknwon {
     )
     Process {
 
-                $adminsvc = "sccmsvp1.ent.wfb.bank.corp";
-                $SQLServerFQDN = "SCCMCASSQL.ent.wfb.bank.corp";
+                $adminsvc = "sccmsvp1.generic.bank.corp";
+                $SQLServerFQDN = "SCCMCASSQL.generic.bank.corp";
                 $SiteDB = "CM_MEM";
                 $SiteCode = "MEM";
                 $scriptPath = "D:\Apps\2Pint Software\iPXE AnywhereWS\Scripts"
